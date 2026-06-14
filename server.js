@@ -42,6 +42,9 @@ import settingsRoutes from "./routes/settings.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Required for Render / Reverse Proxy
+app.set("trust proxy", 1);
+
 // ─────────────────────────────────────
 // Security Middleware
 // ─────────────────────────────────────
@@ -53,29 +56,34 @@ app.use(
   })
 );
 
+// ─────────────────────────────────────
+// CORS
+// ─────────────────────────────────────
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "https://rajadairy.netlify.app",
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "https://rajadairy.netlify.app/"
-    ],
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("CORS Not Allowed"));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-// ─────────────────────────────────────
-// Rate Limiter
-// ─────────────────────────────────────
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 500,
-  message: {
-    success: false,
-    message: "Too many requests",
-  },
-});
 
-app.use("/api", limiter);
+// Handle preflight requests
+app.options("*", cors());
 
 // ─────────────────────────────────────
 // Body Parser
@@ -91,25 +99,39 @@ app.use(
 );
 
 // ─────────────────────────────────────
-// Health Route
+// Rate Limiter
 // ─────────────────────────────────────
-// Health Route
-// ─────────────────────────────────────
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many requests. Please try again later.",
+  },
+});
 
+app.use("/api", limiter);
+
+// ─────────────────────────────────────
+// Health Routes
+// ─────────────────────────────────────
 app.get("/", (req, res) => {
   res.send("🥛 DairyFlow Backend Running");
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({
+  res.status(200).json({
     success: true,
     message: "DairyFlow API Running",
     environment: process.env.NODE_ENV,
     timestamp: new Date().toISOString(),
   });
 });
+
 // ─────────────────────────────────────
-// Routes
+// API Routes
 // ─────────────────────────────────────
 app.use("/api/auth", authRoutes);
 app.use("/api/distributors", distributorRoutes);
@@ -127,9 +149,13 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/settings", settingsRoutes);
 
 // ─────────────────────────────────────
-// Error Handling
+// 404 Handler
 // ─────────────────────────────────────
 app.use(notFound);
+
+// ─────────────────────────────────────
+// Global Error Handler
+// ─────────────────────────────────────
 app.use(errorHandler);
 
 // ─────────────────────────────────────
@@ -148,20 +174,19 @@ const startServer = async () => {
 ╠════════════════════════════════════╣
 ║ ✅ Port : ${PORT}
 ║ 🌍 Mode : ${process.env.NODE_ENV}
-║ 🔗 URL  : http://localhost:${PORT}
+║ 🚀 Server Started Successfully
 ╚════════════════════════════════════╝
       `);
     });
   } catch (error) {
     console.error("❌ Server Failed");
     console.error(error);
-
     process.exit(1);
   }
 };
 
 // ─────────────────────────────────────
-// Shutdown Events
+// Graceful Shutdown
 // ─────────────────────────────────────
 process.on("SIGINT", () => {
   console.log("🛑 Server stopped");
