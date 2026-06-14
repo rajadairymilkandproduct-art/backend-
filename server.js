@@ -40,6 +40,7 @@ import settingsRoutes from "./routes/settings.js";
 // App Setup
 // ─────────────────────────────────────
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 
 // ─────────────────────────────────────
@@ -58,7 +59,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://localhost:5174",
-      "https://rajadairy.netlify.app/"
+      "https://rajadairy.netlify.app"
     ],
     credentials: true,
   })
